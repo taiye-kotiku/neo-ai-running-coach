@@ -276,7 +276,6 @@ UNIQUE(user_phone, week_number, session_number)
 );
 ```
 
-![Database Tables](screenshots/13-workout-history-table.png)
 
 ## 💰 Business Model
 
