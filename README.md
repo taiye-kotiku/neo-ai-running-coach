@@ -38,7 +38,7 @@ Neo transforms professional running coaching into an accessible WhatsApp experie
 - User profiling (age, weight, running level, goals, availability)
 - Instant personalized plan generation
 
-![Onboarding Flow](screenshots/01-whatsapp-onboarding.png)
+![Onboarding Flow](screenshots/01-whatsapp-onboarding.jpg)
 
 ### 💳 Subscription Management
 - Three pricing tiers (€9.99/month, €55/6-months, €100/year)
@@ -46,21 +46,20 @@ Neo transforms professional running coaching into an accessible WhatsApp experie
 - Discount code system
 - Automated subscription lifecycle via webhooks
 
-![Stripe Checkout](screenshots/04-stripe-checkout.png)
+![Stripe Checkout](screenshots/04-stripe-checkout.jpeg)
 
 ### 📅 Automated Weekly Plans
 - Every Monday at 8 AM generation
 - Progress-based adaptation (completion rate + difficulty analysis)
 - Personalized sessions with distance, pace, and nutrition tips
 
-![Weekly Plan](screenshots/02-weekly-plan.png)
+![Weekly Plan](screenshots/02-weekly-plan.jpg)
 
 ### 🏋️ Workout Tracking
 - Session logging (distance, time, pace, difficulty)
 - AI-powered tool for data extraction
 - Performance history and analytics
 
-![Workout Tracking](screenshots/11-workout-tracking.png)
 
 ### ⏰ Daily Reminders
 - Smart scheduling based on weekly plan
@@ -144,22 +143,18 @@ Persistent storage layer:
 <table>
   <tr>
     <td width="50%">
-      <img src="screenshots/01-whatsapp-onboarding.png" alt="Onboarding">
+      <img src="screenshots/01-whatsapp-onboarding.jpg" alt="Onboarding">
       <p align="center"><b>Conversational Onboarding</b></p>
     </td>
     <td width="50%">
-      <img src="screenshots/02-weekly-plan.png" alt="Weekly Plan">
+      <img src="screenshots/02-weekly-plan.jpg" alt="Weekly Plan">
       <p align="center"><b>Personalized Weekly Plan</b></p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="screenshots/04-stripe-checkout.png" alt="Payment">
+      <img src="screenshots/04-stripe-checkout.jpeg" alt="Payment">
       <p align="center"><b>Stripe Subscription Checkout</b></p>
-    </td>
-    <td width="50%">
-      <img src="screenshots/11-workout-tracking.png" alt="Tracking">
-      <p align="center"><b>AI Workout Tracking</b></p>
     </td>
   </tr>
 </table>
@@ -315,7 +310,7 @@ Supabase account
 ### Quick Start
 
 1. **Clone Repository**
-git clone https://github.com/[your-username]/neo-ai-running-coach.git
+git clone https://github.com/taiye-kotiku/neo-ai-running-coach.git
 cd neo-ai-running-coach
 
 2. **Import Workflows**
@@ -363,8 +358,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Built by:** Taiye Promise Kotiku
 
 **Portfolio:** [https://taiye.framer.website]  
-**LinkedIn:** [Your LinkedIn]  
-**Email:** [promisetaiye16@gmail.com]  
+**LinkedIn:** [www.linkedin.com/in/taiye-kotiku]  
+**Email:** [promisetaiye16@gmail.com | kotikutaiye@gmail.com]  
 **Twitter:** [@taiyekotiku]
 
 ---
