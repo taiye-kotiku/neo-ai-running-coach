@@ -310,8 +310,10 @@ Supabase account
 ### Quick Start
 
 1. **Clone Repository**
+```bash
 git clone https://github.com/taiye-kotiku/neo-ai-running-coach.git
 cd neo-ai-running-coach
+```
 
 2. **Import Workflows**
 - Import JSON files from `/workflows` directory into n8n
