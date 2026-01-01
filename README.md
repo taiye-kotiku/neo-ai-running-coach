@@ -2,7 +2,6 @@
 
 > Full-stack subscription-based training platform delivering personalized coaching through WhatsApp using n8n, OpenAI GPT-4o, Stripe, and Supabase.
 
-![Architecture Diagram](screenshots/architecture-diagram.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![n8n](https://img.shields.io/badge/n8n-Workflow_Automation-EA4B71?logo=n8n)](https://n8n.io)
