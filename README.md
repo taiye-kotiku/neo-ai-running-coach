@@ -37,7 +37,6 @@ Neo transforms professional running coaching into an accessible WhatsApp experie
 - User profiling (age, weight, running level, goals, availability)
 - Instant personalized plan generation
 
-![Onboarding Flow](screenshots/01-whatsapp-onboarding.jpg)
 
 ### 💳 Subscription Management
 - Three pricing tiers (€9.99/month, €55/6-months, €100/year)
