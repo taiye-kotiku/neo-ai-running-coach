@@ -332,12 +332,12 @@ See [SETUP.md](docs/SETUP.md) for detailed instructions.
 
 ## 📊 Metrics📈 System Scale:
 
-6 production workflows
-4 API integrations
-4 database tables
-100-message chat memory
-Unlimited concurrent users
-Sub-second response times
+- 4 production workflows
+- 4 API integrations
+- 4 database tables
+- 100-message chat memory
+- Unlimited concurrent users
+- Sub-second response times
 
 
 ## 🚀 Future Enhancements
