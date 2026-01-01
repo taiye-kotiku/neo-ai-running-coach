@@ -1,0 +1,1633 @@
+{
+  "name": "Neo - MASTER ROUTER",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/users",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "=eq.{{ $json.messages[0].from }}"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3c7727cd-9387-421f-8a9b-465585d64474",
+      "name": "Check User in DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -768,
+        1624
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Is Verification?').first().json;\n\n// Handle BOTH WhatsApp Trigger AND regular Webhook structures\nlet message, userPhone, userMessage;\n\nif (data.messages && data.messages[0]) {\n  message = data.messages[0];\n  userPhone = message.from;\n  userMessage = message.text?.body;\n}\nelse if (data.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {\n  message = data.body.entry[0].changes[0].value.messages[0];\n  userPhone = message.from;\n  userMessage = message.text?.body;\n}\n\n// ✅ FIXED: Get the user object directly (not an array!)\nconst userData = $('Check User in DB').first()?.json;\n\n// Check if user is selecting a plan\nconst isSelectingPlan = userMessage && /^[123]$/.test(userMessage.trim());\n\n// ✅ FIXED: Check if user exists (it's an object, not array!)\nconst userExists = !!userData && !!userData.phone;\nconst user = userExists ? userData : null;\n\n// Routing logic\nlet route = '';\nlet reason = '';\n\nif (!message) {\n  route = 'ignore';\n  reason = 'No message received';\n} \nelse if (!userExists) {\n  route = 'onboarding';\n  reason = 'User does not exist in database';\n} \nelse if (\n  userMessage?.toLowerCase().includes('activar subscripció') ||\n  userMessage?.toLowerCase().includes('activar suscripción') ||\n  userMessage?.toLowerCase().includes('activar subscripcion') ||\n  userMessage?.toLowerCase().includes('activate subscription') ||\n  isSelectingPlan\n) {\n  route = 'payment';\n  reason = 'User wants to activate subscription or selected plan';\n} \nelse if (user?.subscripcio === 'active' || user?.subscripcio === 'trial') {\n  route = 'premium';\n  reason = 'User has active subscription';\n} \nelse if (user?.onboarding_completed === true) {\n  // User finished onboarding but hasn't subscribed yet\n  route = 'payment';\n  reason = 'User completed onboarding, offer subscription';\n}\nelse {\n  route = 'onboarding';\n  reason = 'User exists but needs onboarding';\n}\n\nreturn {\n  route,\n  reason,\n  userPhone,\n  userMessage,\n  userData: user,\n  originalInput: data\n};"
+      },
+      "id": "af11dd79-41e0-43b8-92ac-32645802b599",
+      "name": "Determine Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        1624
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "route-onboarding",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "onboarding",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "route-payment",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "payment",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "route-premium",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "premium",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1c0a943c-4cc1-410d-8b1c-81ec9fc9a808",
+      "name": "Route to Flow",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -320,
+        1608
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "maxTokens": 1000,
+          "temperature": 0.7
+        }
+      },
+      "id": "07d1b9bf-24f5-48bf-b0f3-a01a66ee66ee",
+      "name": "OpenAI Onboarding",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        448,
+        896
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Determine Route').item.json.userPhone }}",
+        "contextWindowLength": 20
+      },
+      "id": "c72a1891-0567-4197-8683-876b0b05dad7",
+      "name": "Memory Onboarding",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        576,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $('Determine Route').first().json.userMessage;\n\nif (message.includes('1') || message.includes('mensual')) {\n  return { selectedPlan: true, plan: '1' };\n} else if (message.includes('2') || message.includes('semestral')) {\n  return { selectedPlan: true, plan: '2' };\n} else if (message.includes('3') || message.includes('anual')) {\n  return { selectedPlan: true, plan: '3' };\n}\n\nreturn { selectedPlan: false };"
+      },
+      "id": "43aba42c-673a-45a4-b835-1dc5a8b4e83c",
+      "name": "Check Plan Selection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.selectedPlan }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "id": "0690ace4-d407-49e1-9db7-4f89d9da0eec"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6567049b-d698-4da0-9f8b-61ec03a84910",
+      "name": "Has Selected Plan?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        128,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "El usuario quiere activar su subscripción. Pregúntale qué plan prefiere de manera amigable:\n\n1️⃣ Plan Mensual - €9.99/mes\n2️⃣ Plan Semestral - €55 (ahorra 15%)\n3️⃣ Plan Anual - €100 (ahorra 33%)\n\nTodos incluyen 14 días de prueba gratis.\n\nDile que responda con 1, 2 o 3.",
+        "options": {
+          "systemMessage": "Eres Neo. El usuario quiere activar su subscripción. Pregúntale qué plan prefiere."
+        }
+      },
+      "id": "4b2ccc2d-6eb0-4329-8064-0fb454ca9699",
+      "name": "Ask Plan",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.3,
+      "position": [
+        1572,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "cc074669-bb5a-4132-90ed-e863c65d658a",
+      "name": "OpenAI Plan",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        1424
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const plan = $('Check Plan Selection').first().json.plan;\nconst userData = $('Determine Route').first().json.userData;\n\nlet priceId = '';\nlet planName = '';\nlet planPrice = '';\n\nif (plan === '1') {\n  priceId = 'YOUR_STRIPE_MONTHLY_PRICE_ID';\n  planName = 'Plan Mensual';\n  planPrice = '€9.99/mes';\n} else if (plan === '2') {\n  priceId = 'YOUR_STRIPE_SEMESTRAL_PRICE_ID';\n  planName = 'Plan Semestral';\n  planPrice = '€55/6 meses';\n} else if (plan === '3') {\n  priceId = 'YOUR_STRIPE_ANNUAL_PRICE_ID';\n  planName = 'Plan Anual';\n  planPrice = '€100/año';\n}\n\nreturn {\n  priceId,\n  planName,\n  planPrice,\n  userPhone: userData.phone,\n  userName: userData.nom || 'Usuario',\n  userEmail: `${userData.phone}@neo.run`\n};"
+      },
+      "id": "29eb493d-aa11-40cf-9449-8a8b11b0dcf1",
+      "name": "Build Stripe Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/checkout/sessions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "mode",
+              "value": "subscription"
+            },
+            {
+              "name": "line_items[0][price]",
+              "value": "={{ $json.priceId }}"
+            },
+            {
+              "name": "line_items[0][quantity]",
+              "value": "1"
+            },
+            {
+              "name": "success_url",
+              "value": "https://neorunai.com"
+            },
+            {
+              "name": "cancel_url",
+              "value": "https://neorun.com/cancel"
+            },
+            {
+              "name": "allow_promotion_codes",
+              "value": "=true"
+            },
+            {
+              "name": "metadata[phone]",
+              "value": "={{ $json.userPhone }}"
+            },
+            {
+              "name": "metadata[plan_name]",
+              "value": "={{ $json.planName }}"
+            },
+            {
+              "name": "subscription_data[trial_period_days]",
+              "value": "14"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "69783e3f-143e-45b2-892c-32c101143e69",
+      "name": "Create Stripe Checkout",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        576,
+        1136
+      ],
+      "credentials": {
+        "stripeApi": {
+          "id": "YOUR_STRIPE_CREDENTIAL_ID",
+          "name": "Live Stripe"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/users",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "=eq.{{ $('Build Stripe Data').item.json.userPhone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscripcio\": \"trial\",\n  \"stripe_customer_id\": \"{{ $json.customer }}\"\n}",
+        "options": {}
+      },
+      "id": "5077d8e0-99df-42bc-911f-dd5bce629245",
+      "name": "Update User Trial",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        984,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "906619612537041",
+        "recipientPhoneNumber": "={{ $('Determine Route').item.json.userPhone }}",
+        "textBody": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "id": "f3b14416-6d91-4960-bb45-3222b8ed473f",
+      "name": "Send WhatsApp Response",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        2104,
+        1328
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "YOUR_WHATSAPP_CREDENTIAL_ID",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "is-verification",
+              "leftValue": "={{ $json.query['hub.mode'] }}",
+              "rightValue": "subscribe",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "979c51d8-03eb-44f2-b040-f0c0a333af93",
+      "name": "Is Verification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -992,
+        1528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const mode = $json.query['hub.mode'];\nconst token = $json.query['hub.verify_token'];\nconst challenge = $json.query['hub.challenge'];\n\nconst VERIFY_TOKEN = 'neo_webhook_verify_2025';\n\nif (mode === 'subscribe' && token === VERIFY_TOKEN) {\n  return { challenge: parseInt(challenge) };\n}\n\nthrow new Error('Verification failed');"
+      },
+      "id": "46c38b31-68d4-4203-a5ba-804f04090ff0",
+      "name": "Verify Webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        1432
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.challenge }}",
+        "options": {}
+      },
+      "id": "1db8b871-c243-4be4-a497-0bc00b1fff04",
+      "name": "Respond Verification",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -544,
+        1432
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        1528
+      ],
+      "id": "6f634907-a5b1-47fd-80a5-35591ee95f6e",
+      "name": "WhatsApp Trigger",
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "YAcNNEUtlM5pdqSW",
+          "name": "WhatsApp OAuth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const checkoutUrl = $('Create Stripe Checkout').first().json.url;\nconst planName = $('Build Stripe Data').first().json.planName;\nconst planPrice = $('Build Stripe Data').first().json.planPrice;\n\nconst message = `¡Perfecto! Has elegido el ${planName} (${planPrice}).\n\n🎁 Tienes 14 días de prueba GRATIS para empezar.\n\nHaz clic aquí para completar el registro:\n${checkoutUrl}\n\nUna vez completado el pago, recibirás tu primer plan semanal completo y podrás preguntarme cualquier duda sobre tu entrenamiento.\n\n¡Nos vemos dentro! 🏃💪`;\n\nreturn { \n  output: message,\n  userPhone: $('Determine Route').first().json.userPhone\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1636,
+        1136
+      ],
+      "id": "8156bd94-9699-4312-b3d4-6c5f462cd4a4",
+      "name": "Format Payment Link"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Creates a Stripe checkout session for the selected subscription plan.\nReturns checkout URL, customer ID, plan details.",
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/checkout/sessions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "subscription_data[trial_period_days]",
+              "value": "14"
+            },
+            {
+              "name": "metadata[plan_name]",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Plan Name`, 'string') }}"
+            },
+            {
+              "name": "metadata[phone]",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters2_Value', `Phone Number`, 'string') }}"
+            },
+            {
+              "name": "billing_address_collection",
+              "value": "=required"
+            },
+            {
+              "name": "success_url",
+              "value": "https://neorunai.com"
+            },
+            {
+              "name": "line_items[0][quantity]",
+              "value": "1"
+            },
+            {
+              "name": "=line_items[0][price]",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters6_Value', `PriceID Of the plan`, 'string') }}"
+            },
+            {
+              "name": "mode",
+              "value": "subscription"
+            },
+            {
+              "name": "cancel_url",
+              "value": "https://neorun.com/cancel"
+            },
+            {
+              "name": "allow_promotion_codes",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        768,
+        896
+      ],
+      "id": "6e088256-33aa-42ed-b53a-74b228795c1d",
+      "name": "create_stripe_checkout",
+      "credentials": {
+        "stripeApi": {
+          "id": "YOUR_STRIPE_CREDENTIAL_ID",
+          "name": "Live Stripe"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use this tool when the user selects a subscription plan (1, 2, or 3) after saying \"activar subscripción\" or similar. This tool will create the Stripe checkout, update the user's trial status in the database, and return a formatted payment link message to send to the user. Input should be just the plan number: \"1\", \"2\", or \"3\".",
+        "text": "=Create checkout for plan {{ $('Determine Route').item.json.userMessage }}",
+        "options": {
+          "systemMessage": "You are a payment processing assistant for Neo, a running coach platform.\n\nTASK:\nWhen the user selects a subscription plan (1, 2, or 3), you must:\n1. Create a Stripe checkout session using create_stripe_checkout tool\n2. Format the payment link message using send_payment_link tool\n3. Return the formatted message to be sent to the user\n\nPLAN MAPPING:\n- Plan 1 = Monthly (€9.99/mes)\n- Plan 2 = 6-month (€55)\n- Plan 3 = Annual (€100)\n\nAll plans include 14-day free trial.\n\nPrice ID\nProduct 1 (9,99€/month) : YOUR_STRIPE_MONTHLY_PRICE_ID\n\nProduct 2 (55€/6 month) : YOUR_STRIPE_SEMESTRAL_PRICE_ID\n\nProduct 3 (100€/year) : YOUR_STRIPE_ANNUAL_PRICE_ID\n\n\n\nEXECUTION STEPS:\n1. Extract plan number from input (1, 2, or 3)\n2. Use create_stripe_checkout tool with the correct price_id\n3. Wait for response with checkout_url, plan_name, and plan_price\n4. Use send_payment_link tool with the checkout details\n5. Return ONLY the formatted message (no extra text)\n\nRULES:\n- Execute both tools in sequence\n- Do NOT skip steps\n- Return ONLY the final formatted message\n- Do NOT add commentary\n\nThe user's subscription will be activated automatically when they complete payment."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 2.2,
+      "position": [
+        656,
+        688
+      ],
+      "id": "ae3433df-7da4-44ce-ba4b-f5320925329a",
+      "name": "payment_processor"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Determine Route').item.json.toJsonString() }}",
+        "options": {
+          "systemMessage": "You are Neo, a personal running coach AI that speaks naturally and motivationally via WhatsApp.\n\nTOOLS AVAILABLE:\nYou have access to a \"payment_processor\" tool and a \"save_onboarding_data\" tool.\n\nONBOARDING FLOW:\n\nWhen a user starts, ask these 8 questions ONE AT A TIME:\n\n1. Age (must be >18)\n\"Hola! Encantat de coneixe't 👋 Sóc Neo, el teu entrenador personal de running. Per començar, necessito algunes dades. Primera pregunta: 👉 Quina edat tens? (Has de ser major de 18 anys)\"\n\n2. Gender\n\"Perfecte! Ara digue'm: ets home o dona?\"\n\n3. Weight\n\"Genial. Quin és el teu pes actual? (en kg)\"\n\n4. Terrain\n\"Entrenes normalment sobre asfalt, muntanya, o una mica de tot?\"\n\n5. Days available\n\"Quants dies a la setmana pots entrenar?\"\n\n6. Schedule details\n\"Quins dies et van millor per entrenar? Hi ha algun dia que puguis dedicar-hi més temps?\"\n\n7. Level/records\n\"Tens alguna marca personal (5K, 10K, 21K, ritmes…) o comences des de zero?\"\n\n8. Goals\n\"Tens algun objectiu o alguna cursa planificada? Si només vols millorar i tenir una rutina, també perfecte 😉\"\n\n═══════════════════════════════════════════════════════════════════\nAFTER 8 QUESTIONS - GENERATE INITIAL PLAN:\n═══════════════════════════════════════════════════════════════════\n\nUse this exact format:\n\n═══════════════════════\n🏃 NEO — Pla Inicial Personalitzat\n═══════════════════════\n\n📊 **PERFIL**\n- Edat: [X] anys\n- Pes: [X] kg\n- Terreny: [tipus]\n- Dies disponibles: [X] dies/setmana\n- Nivell actual: [descripció basada en marques]\n- Objectiu principal: [objectiu]\n\n═══════════════════════\n🎯 **OBJECTIU PRIMER MES**\n[Objectiu realista i mesurable basat en nivell]\n\n═══════════════════════\n📅 **SETMANA 1 - Adaptació**\n\n**Sessió 1: [Dia]** - Rodatge suau\n- Escalfament: 5 min caminant + mobilitat\n- Principal: [X]km a ritme conversacional ([min:seg]/km)\n- Cooldown: 5 min caminant + estiraments\n- Durada total: [X] min\n- Sensació objectiu: 6/10\n\n**Sessió 2: [Dia]** - [Tipus]\n[Mateixa estructura detallada]\n\n**Sessió 3: [Dia]** - [Tipus]\n[Mateixa estructura detallada]\n\n[Si 4-5 dies: afegir més sessions]\n\n═══════════════════════\n⏱️ **RITMES RECOMANATS**\n- Rodatge suau: [min:seg]/km - [min:seg]/km\n- Ritme còmode: [min:seg]/km - [min:seg]/km\n\n═══════════════════════\n🥗 **NUTRICIÓ**\n[Consell amb exemples pràctics]\n- Pre-entrenament: [exemple]\n- Post-entrenament: [exemple]\n\n═══════════════════════\n🧠 **MENTALITAT**\n[Consell motivacional específic]\n\n═══════════════════════\n\nPLAN GENERATION RULES:\n✓ Very specific with distances, paces, and durations\n✓ Adapt COMPLETELY to declared level\n✓ Beginner → 20-30min sessions, slow paces\n✓ Advanced → more demanding sessions\n✓ Always realistic - better to start easy\n\n═══════════════════════════════════════════════════════════════════\nCRITICAL: SAVE DATA BEFORE SUBSCRIPTION\n═══════════════════════════════════════════════════════════════════\n\nIMMEDIATELY after delivering the initial plan, you MUST call save_onboarding_data tool with:\n\n- phone: [user's phone number from context]\n- edat: [age as number, e.g., 25]\n- genere: [home or dona]\n- pes: [weight as number, e.g., 70]\n- terreny: [asfalt, muntanya, or mixt]\n- dies_setmana: [number of days, e.g., 3]\n- disponibilitat: [full schedule details they provided]\n- nivell: [their complete level description and records]\n- objectius: [their complete goals description]\n\nWait for confirmation that data is saved.\n\n═══════════════════════════════════════════════════════════════════\nTHEN EXPLAIN SUBSCRIPTION:\n═══════════════════════════════════════════════════════════════════\n\nONLY AFTER save_onboarding_data succeeds, send:\n\n\"Quan vulguis activar Neo completament i rebre els teus plans setmanals adaptats, tenim 3 plans disponibles:\n\n💪 **Plan Mensual** - €9.99/mes\nIdeal per provar Neo sense compromís\n\n🏃 **Plan Semestral** - €55 per 6 mesos (estalvies 15%)\n€9.17/mes - Perfecte per mantenir la constància\n\n🏆 **Plan Anual** - €100/any (estalvies 33%)\n€8.33/mes - Màxim estalvi per corredors seriosos\n\n✨ Tots els plans inclouen:\n- 14 dies de prova gratis\n- Plans setmanals personalitzats\n- Ajustos automàtics\n- Assessorament nutricional\n- Suport psicològic\n\nPer activar, només escriu:\n👉 **activar subscripció**\n\nEt preguntaré quin pla prefereixes!\"\n\n═══════════════════════════════════════════════════════════════════\nPAYMENT FLOW:\n═══════════════════════════════════════════════════════════════════\n\nWhen user says \"activar subscripción\" or similar, ask:\n\"Perfecte! Quin pla t'interessa més?\n1️⃣ Mensual - €9.99/mes\n2️⃣ Semestral - €55 (estalvies 15%)\n3️⃣ Anual - €100 (estalvies 33%)\n\nRespon amb 1, 2 o 3\"\n\nWhen user responds with 1, 2, or 3:\n→ Call payment_processor tool with the plan number\n→ Return the message it gives you\n\nRULES:\n- Ask ONE question at a time during onboarding\n- Be specific with training plans\n- ALWAYS save data before explaining subscriptions\n- Use memory to remember context\n- Use tools when needed\n\n{chat_history}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        592,
+        464
+      ],
+      "id": "aa8c3766-ebeb-485b-9ae5-81ba6dee52aa",
+      "name": "Onboarding Agent"
+    },
+    {
+      "parameters": {
+        "description": "Formats the payment link message with plan details and checkout URL.",
+        "jsCode": "// Get checkout URL from AI input\nconst checkoutUrl = $fromAI('checkout_url', 'Stripe checkout URL from previous tool', 'string');\nconst planName = $fromAI('plan_name', 'Plan name from previous tool', 'string');\nconst planPrice = $fromAI('plan_price', 'Plan price from previous tool', 'string');\n\nconst message = `¡Perfecto! Has elegido el ${planName} (${planPrice}).\n\n🎁 Tienes 14 días de prueba GRATIS para empezar.\n\nHaz clic aquí para completar el registro:\n${checkoutUrl}\n\nUna vez completado el pago, tu subscripción se activará automáticamente y recibirás un mensaje de bienvenida.\n\n¡Nos vemos dentro! 🏃💪`;\n\nreturn message;"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        896,
+        896
+      ],
+      "id": "2f034d99-4b8f-481c-8f44-1e15f2eca43e",
+      "name": "send_payment_link"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Saves user onboarding data to database. Call ONLY after collecting all 8 answers. \n\nCRITICAL - Provide EXACT values only:\n- phone: Just the phone number digits (e.g., \"34681818156\")\n- edat: ONLY the age number with NO text (e.g., \"25\" NOT \"25 años\")\n- genere: ONLY \"home\" or \"dona\"\n- pes: ONLY the weight number with NO text (e.g., \"70\" NOT \"70 kg\")\n- terreny: ONLY \"asfalt\", \"muntanya\", or \"mixt\"\n- dies_setmana: ONLY the number with NO text (e.g., \"3\" NOT \"3 días\")\n- disponibilitat: Full schedule text\n- nivell: Full level description text\n- objectius: Full goals description text\n\nExample correct call:\nphone: \"34681818156\"\nedat: \"25\"\npes: \"70\"\ndies_setmana: \"3\"",
+        "method": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/users",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', `User's phone number with country code as a string of digits only. Example: 34681818156 (no spaces, no dashes, no plus sign). This is the WhatsApp number the user is messaging from.`, 'string') }}"
+            },
+            {
+              "name": "nom",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `User's name if they provided it during conversation. If they did not provide a name, use \"Usuario\". This is optional and defaults to Usuario.`, 'string') }}"
+            },
+            {
+              "name": "edat",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters2_Value', `User's age as ONLY a number with NO text. Examples: \"25\" is correct, \"25 años\" is WRONG. Must be just the numeric age value like 25, 30, 42, etc.`, 'string') }}"
+            },
+            {
+              "name": "sexe",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters3_Value', `User's gender. Must be EXACTLY either \"home\" (for male) or \"dona\" (for female). No other values allowed. Use the exact Catalan words home or dona.`, 'string') }}"
+            },
+            {
+              "name": "pes",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters4_Value', `User's weight in kilograms as ONLY a number with NO text or units. Examples: \"70\" is correct, \"70 kg\" is WRONG. Must be just the numeric weight value like 70, 65.5, 80, etc.`, 'string') }}"
+            },
+            {
+              "name": "terreny",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters5_Value', `Type of terrain where the user trains. Must be EXACTLY one of: \"asfalt\" (asphalt/pavement), \"muntanya\" (mountain/trail), or \"mixt\" (mixed - both types). Use the exact Catalan words.`, 'string') }}"
+            },
+            {
+              "name": "dies_disponibles",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters6_Value', `Number of days per week the user can train as ONLY a number with NO text. Examples: \"3\" is correct, \"3 días\" or \"3 dies\" is WRONG. Must be just the numeric value like 3, 4, 5, etc.`, 'string') }}"
+            },
+            {
+              "name": "disponibilitat_detallada",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters7_Value', `The user's detailed schedule information - which specific days they can train and any time preferences they mentioned. This is free text. Example: \"Lunes, miércoles y viernes por la tarde, los fines de semana tengo más tiempo\".`, 'string') }}"
+            },
+            {
+              "name": "nivell",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters8_Value', `The user's current running level including any personal records or times they mentioned. This is free text. Examples: \"Principiante, nunca he corrido\", \"Intermedio, hago 10K en 55 minutos\", \"Avanzado, mi mejor 5K es 20 minutos\".`, 'string') }}"
+            },
+            {
+              "name": "objectius",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters9_Value', `The user's running goals and what they want to achieve. This is free text. Examples: \"Correr mi primer 5K\", \"Bajar de 50 minutos en 10K\", \"Completar una media maratón en 6 meses\", \"Solo buscar una rutina y estar en forma\".`, 'string') }}"
+            },
+            {
+              "name": "onboarding_completed",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        944,
+        688
+      ],
+      "id": "9790f239-8489-4f09-9c88-4c7f13d1079b",
+      "name": "save_onboarding_data"
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/workout_history",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "=eq.{{ $('Determine Route').item.json.userData.phone }}"
+            },
+            {
+              "name": "order",
+              "value": "created_at.desc"
+            },
+            {
+              "name": "limit",
+              "value": "20"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "52100f5b-6d38-4d8f-baeb-bdaf70c33920",
+      "name": "Get Workout History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        1816
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/chat_history",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "=eq.{{ $('Determine Route').item.json.userData.phone }}"
+            },
+            {
+              "name": "order",
+              "value": "timestamp.desc"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c39d33ce-e15b-4c84-b109-c0e83e8fe229",
+      "name": "Get Chat History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        2008
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const userData = $('Determine Route').first().json.userData;\nconst userMessage = $('Determine Route').first().json.userMessage;\n\n// Reference each GET node directly by name\nconst workoutHistory = $('Get Workout History').first().json || [];\nconst chatHistory = $('Get Chat History').first().json || [];\nconst weeklyPlan = $('Get Weekly Plan').first().json || [];\n\n// Build workout context\nlet workoutContext = '';\nif (workoutHistory.length > 0) {\n  workoutContext = `Últimos ${workoutHistory.length} entrenamientos:\\n`;\n  workoutHistory.slice(0, 10).forEach(w => {\n    if (w.completed) {\n      workoutContext += `- Semana ${w.week_number}, Sesión ${w.session_number}: ${w.distance}km en ${w.time_minutes}min. Dificultad: ${w.difficulty_rating}/10. Feedback: \"${w.feedback}\"\\n`;\n    }\n  });\n} else {\n  workoutContext = 'Aún no hay entrenamientos completados.';\n}\n\n// Build chat context\nlet chatContext = '';\nif (chatHistory.length > 0) {\n  chatContext = `Últimas ${Math.min(chatHistory.length, 20)} conversaciones:\\n`;\n  chatHistory.slice(0, 20).reverse().forEach(msg => {\n    chatContext += `${msg.message_from === 'user' ? 'Usuario' : 'Neo'}: ${msg.message_text}\\n`;\n  });\n} else {\n  chatContext = 'Primera conversación premium.';\n}\n\n// Build weekly plan context\nlet weeklyPlanContext = '';\nif (weeklyPlan.length > 0) {\n  const currentPlan = weeklyPlan[0];\n  weeklyPlanContext = `SEMANA ${currentPlan.week_number} (${currentPlan.status}):\\n${currentPlan.plan_text}`;\n} else {\n  weeklyPlanContext = 'No hay plan semanal activo. El próximo lunes se generará automáticamente.';\n}\n\nreturn {\n  userMessage,\n  userPhone: userData.phone,\n  userName: userData.nom || 'Usuario',\n  userAge: userData.edat,\n  userWeight: userData.pes,\n  userLevel: userData.nivell,\n  userGoals: userData.objectius,\n  workoutContext,\n  chatContext,\n  weeklyPlanContext\n};"
+      },
+      "id": "1ab14034-ae67-433d-beea-9cbdc0f21a88",
+      "name": "Build Premium Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        1816
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "maxTokens": 500,
+          "temperature": 0.8
+        }
+      },
+      "id": "242b9900-7eec-4846-af60-592856bc4b4e",
+      "name": "OpenAI Premium",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        800,
+        2040
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Build Premium Context').item.json.userPhone }}",
+        "contextWindowLength": 100
+      },
+      "id": "723a2503-2074-4658-8ae5-b4421e176886",
+      "name": "Memory Premium",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        928,
+        2040
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/chat_history",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "={{ $('Build Premium Context').item.json.userPhone }}"
+            },
+            {
+              "name": "message_from",
+              "value": "user"
+            },
+            {
+              "name": "message_text",
+              "value": "={{ $('Build Premium Context').item.json.userMessage }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        576,
+        1816
+      ],
+      "id": "ad5e6659-6733-4634-b0e1-61c3bdc40e2a",
+      "name": "Save User Message"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userMessage }}",
+        "options": {
+          "systemMessage": "=ROLE / SYSTEM PROMPT\nEres Neo, un entrenador personal de running profesional, motivador y empático que habla de forma natural por WhatsApp.\n\n═══════════════════════════════════════════════════════════════════\nCONTEXTO DEL USUARIO\n═══════════════════════════════════════════════════════════════════\n\n📊 PERFIL:\n- Nombre: {{ $json.userName }}\n- Edad: {{ $json.userAge }} años\n- Peso: {{ $json.userWeight }} kg\n- Nivel: {{ $json.userLevel }}\n- Objetivos: {{ $json.userGoals }}\n\n📅 PLAN SEMANAL ACTUAL:\n{{ $json.weeklyPlanContext }}\n\n🏃 HISTORIAL DE ENTRENOS:\n{{ $json.workoutContext }}\n\n💬 CONVERSACIONES RECIENTES:\n{{ $json.chatContext }}\n\n═══════════════════════════════════════════════════════════════════\nTUS FUNCIONES COMO ENTRENADOR PREMIUM\n═══════════════════════════════════════════════════════════════════\n\n✅ PUEDES HACER:\n1. **Responder dudas** sobre técnica, nutrición, equipamiento\n2. **Ajustar sesiones individuales** si el usuario reporta dificultad\n   - Ejemplo: \"La sesión de ayer fue muy dura\" → Reduce distancia/ritmo de PRÓXIMA sesión\n3. **Motivar y celebrar logros** cuando completen entrenamientos\n4. **Dar consejos personalizados** basados en su nivel y objetivos\n5. **Recomendar ajustes de ritmo** para sesiones específicas\n6. **Responder preguntas técnicas** sobre el plan actual\n\n❌ NO PUEDES HACER:\n1. **NUNCA generar planes semanales completos** (eso lo hace el sistema automáticamente cada lunes)\n2. **NO crear nuevas semanas** de entrenamiento\n3. **NO reescribir todo el plan** aunque te lo pidan\n\n═══════════════════════════════════════════════════════════════════\nREGLAS DE RESPUESTA\n═══════════════════════════════════════════════════════════════════\n\n📏 LONGITUD:\n- Máximo 4-5 líneas\n- Directo y conciso\n- Sin repetir información del plan que ya tienen\n\n🎯 AJUSTES DE SESIONES:\nSi dicen \"muy duro\", \"no pude completar\", \"me costó mucho\":\n→ Reduce SOLO la próxima sesión similar:\n   \"Entendido, para el próximo [tipo de sesión], prueba con [X]km menos o [30seg/km] más lento\"\n\n📅 REFERENCIAS AL PLAN:\n- Si preguntan sobre su plan: Resume brevemente lo que tienen esta semana\n- Si preguntan \"qué toca hoy\": Consulta el plan actual y diles la sesión de hoy\n- Si ya completaron la semana: \"¡Genial! El lunes recibirás tu nuevo plan semanal\"\n\n💪 MOTIVACIÓN:\n- Celebra logros específicos\n- Usa emojis con moderación\n- Sé positivo pero realista\n- Reconoce su esfuerzo\n\n🚫 SI PIDEN NUEVO PLAN COMPLETO:\n\"Los planes semanales se generan automáticamente cada lunes basándome en tu progreso. Mientras tanto, sigue con tu plan actual y dime si necesitas ajustar alguna sesión específica 💪\"\n\n═══════════════════════════════════════════════════════════════════\nEJEMPLOS DE RESPUESTAS\n═══════════════════════════════════════════════════════════════════\n\nUsuario: \"El rodaje de ayer fue muy duro\"\nNeo: \"Entendido. Para el próximo rodaje del viernes, prueba reducir a 4km en lugar de 5km y mantén un ritmo 30 segundos más lento. ¿Cómo te sientes hoy?\"\n\nUsuario: \"Completé la sesión de intervals!\"\nNeo: \"¡Brutal! 🔥 Los intervals son de lo más exigente. ¿Cómo fue la recuperación entre series? Descansa bien hoy.\"\n\nUsuario: \"Qué entreno toca hoy?\"\nNeo: \"Hoy toca rodaje suave: 5km a ritmo conversacional (6:00-6:30/km). Duración: 35min aprox. ¡A disfrutar!\"\n\nUsuario: \"Dame un nuevo plan para la semana\"\nNeo: \"Los planes semanales se generan automáticamente cada lunes. Mientras tanto, sigue con tu plan actual. Si alguna sesión te resulta muy dura o fácil, dime y la ajustamos 👌\"\n\n\n\n═══════════════════════════════════════════════════════════════════\nREGISTRO DE ENTRENOS COMPLETADOS\n═══════════════════════════════════════════════════════════════════\n\nCuando el usuario reporte que completó un entreno, USA LA HERRAMIENTA save_workout_completion.\n\n🎯 FRASES QUE INDICAN COMPLETACIÓN:\n- \"Completé el entreno\"\n- \"Hice la sesión\"  \n- \"Corrí 5km en 30 minutos\"\n- \"Terminé la sesión de hoy\"\n- \"Ya hice los 5km\"\n\n📋 DATOS REQUERIDOS:\n1. ✅ Distancia (km) - \"¿Cuántos km hiciste?\"\n2. ✅ Tiempo (minutos) - \"¿En cuánto tiempo?\"\n3. ✅ Dificultad (1-10) - \"Del 1 al 10, ¿qué tan difícil estuvo?\"\n4. ✅ Número de sesión - \"¿Fue la Sesión 1, 2, o 3?\"\n5. ⚠️ Feedback (opcional) - \"¿Cómo te sentiste?\"\n\n🔄 EJEMPLO DE CONVERSACIÓN:\n\nUsuario: \"Completé el entreno\"\nNeo: \"¡Bien hecho! 💪 ¿Cuántos km corriste y en cuánto tiempo?\"\n\nUsuario: \"5km en 32 minutos\"\nNeo: \"Perfecto. Del 1 al 10, ¿qué tan duro estuvo?\"\n\nUsuario: \"Un 7\"\nNeo: \"¿Fue la Sesión 1, 2, o 3?\"\n\nUsuario: \"La 2\"\nNeo: [Llama save_workout_completion] → \"¡Entreno registrado! 5km en 32min...\"\n\n📊 DESPUÉS DE REGISTRAR:\n- Celebra el logro\n- Compara con sesiones anteriores si las hay\n- Si dificultad >= 8: Sugiere reducir intensidad próxima vez\n- Si dificultad <= 3: Felicita y considera incrementar carga\n\n\n\n═══════════════════════════════════════════════════════════════════\nTONO Y ESTILO\n═══════════════════════════════════════════════════════════════════\n\n✓ Natural y cercano\n✓ Profesional pero amigable\n✓ Motivador sin ser excesivo\n✓ Conciso y directo\n✓ Usa \"tú\" (no \"usted\")\n✓ Emojis: 1-2 por mensaje máximo\n\nRecuerda: Eres su entrenador de confianza. Conoces su historial, su plan actual, y sus objetivos. Responde como un profesional que ha estado siguiendo su progreso."
+        }
+      },
+      "id": "d298f567-715f-4cb4-80cf-1c38469d93dd",
+      "name": "Premium Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.3,
+      "position": [
+        920,
+        1816
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/chat_history",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "={{ $('Build Premium Context').item.json.userPhone }}"
+            },
+            {
+              "name": "message_from",
+              "value": "assistant"
+            },
+            {
+              "name": "message_text",
+              "value": "={{ $('Premium Agent').item.json.output }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1636,
+        1816
+      ],
+      "id": "ef30ebcc-c5ae-4075-84db-16ea11271f25",
+      "name": "Save Neo Response1"
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/weekly_plans",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "=eq.{{ $('Determine Route').item.json.userData.phone }}"
+            },
+            {
+              "name": "status",
+              "value": "eq.active"
+            },
+            {
+              "name": "order",
+              "value": "week_number.desc"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -96,
+        1624
+      ],
+      "id": "73e58b8c-5b98-4d3a-a70c-ba6977e3a43c",
+      "name": "Get Weekly Plan"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3,
+        "options": {
+          "includeUnpaired": true
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        128,
+        1800
+      ],
+      "id": "27a9caf4-6ba8-4bc7-820a-4a1bdf073db8",
+      "name": "Merge Premium Data"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Saves a completed workout session to the database. Requires: user phone, week number, session number, distance in km, time in minutes, difficulty rating (1-10), and optional feedback.",
+        "method": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/workout_history",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', `User's phone number with country code as a string of digits only. This is the WhatsApp number the user is messaging from. Example: \"34681818156\" or \"YOUR_PHONE_NUMBER\" (no spaces, no dashes, no plus sign). Must match the phone number format used throughout the system.`, 'string') }}"
+            },
+            {
+              "name": "week_number",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `The week number of the training plan as a string containing a number. Example: \"1\" for week 1, \"2\" for week 2, etc. This should correspond to the user's current active weekly plan. Must be a positive integer as a string.`, 'string') }}"
+            },
+            {
+              "name": "session_number",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters2_Value', `Which session number from the weekly plan this workout represents, as a string containing a number. Example: \"1\" for Session 1, \"2\" for Session 2, \"3\" for Session 3. Most users have 3-5 sessions per week. Must be a positive integer as a string.`, 'string') }}"
+            },
+            {
+              "name": "distance",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters3_Value', `Total distance covered in kilometers as a string containing a decimal number. Examples: \"5\" for 5km, \"5.5\" for 5.5km, \"10.2\" for 10.2km. Must be a positive number. Do NOT include units like \"km\" - just the numeric value.`, 'string') }}"
+            },
+            {
+              "name": "time_minutes",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters4_Value', `Total workout time in minutes as a string containing a decimal number. Examples: \"30\" for 30 minutes, \"35.5\" for 35 minutes 30 seconds, \"42.75\" for 42 minutes 45 seconds. Must be a positive number. Do NOT include units - just the numeric value in minutes.`, 'string') }}"
+            },
+            {
+              "name": "pace_min_per_km",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters5_Value', `Average pace in minutes per kilometer as a string containing a decimal number. This is calculated as time_minutes divided by distance. Example: if 30 minutes for 5km, pace is \"6.0\" (6:00/km). If 32 minutes for 5km, pace is \"6.4\" (6:24/km). Must be a positive decimal number with 2 decimal places.`, 'string') }}"
+            },
+            {
+              "name": "difficulty_rating",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters6_Value', `How difficult the workout felt on a scale from 1 to 10, as a string containing an integer. Scale: 1-2 = muy fácil (very easy), 3-4 = fácil (easy), 5-6 = moderado (moderate), 7-8 = difícil (hard), 9-10 = muy difícil (very hard). Example: \"5\" for moderate, \"8\" for hard. Must be an integer between 1 and 10 (inclusive).`, 'string') }}"
+            },
+            {
+              "name": "feedback",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters7_Value', `User's comments or feedback about the workout session as free text. Examples: \"Me sentí muy bien\", \"Las piernas estaban cansadas\", \"Tuve que parar en el km 3\", \"Perfecto, sin problemas\". Can be any text the user provides. If user provides no feedback, use \"Sin comentarios\" or leave empty.`, 'string') }}"
+            },
+            {
+              "name": "completed",
+              "value": "=true"
+            },
+            {
+              "name": "completion_date",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        1088,
+        2032
+      ],
+      "id": "642f2fa1-1f89-4e07-9d06-3a049796926b",
+      "name": "save_workout_to_db"
+    },
+    {
+      "parameters": {
+        "description": "Records a completed workout session. Use this when the user reports they finished a training session. Extract: distance in km, time in minutes, difficulty rating (1-10 where 1=very easy, 10=very hard), and any feedback. Ask follow-up questions if data is missing.",
+        "jsCode": "// Extract data from AI\nconst phone = $fromAI('phone', 'User phone number from context', 'string');\nconst weekNumberRaw = $fromAI('week_number', 'Current week number from context', 'string');\nconst sessionNumberRaw = $fromAI('session_number', 'Session number (1, 2, 3, etc.)', 'string');\nconst distanceRaw = $fromAI('distance', 'Distance in km as number only, e.g., \"5\" or \"5.5\"', 'string');\nconst timeRaw = $fromAI('time_minutes', 'Time in minutes as number only, e.g., \"30\"', 'string');\nconst difficultyRaw = $fromAI('difficulty_rating', 'Difficulty 1-10 where 1=easy, 10=hard', 'string');\nconst feedback = $fromAI('feedback', 'User feedback about the session', 'string') || 'Sin comentarios';\n\n// Parse and validate\nconst weekNumber = parseInt(weekNumberRaw);\nconst sessionNumber = parseInt(sessionNumberRaw);\nconst distance = parseFloat(distanceRaw);\nconst timeMinutes = parseFloat(timeRaw);\nconst difficultyRating = parseInt(difficultyRaw);\n\n// Validation\nif (isNaN(distance) || distance <= 0) {\n  return 'Necesito la distancia en km. ¿Cuántos km corriste? (ejemplo: 5 o 5.5)';\n}\n\nif (isNaN(timeMinutes) || timeMinutes <= 0) {\n  return 'Necesito el tiempo en minutos. ¿Cuánto tiempo tardaste? (ejemplo: 30 o 35.5)';\n}\n\nif (isNaN(difficultyRating) || difficultyRating < 1 || difficultyRating > 10) {\n  return 'Necesito la dificultad del 1 al 10. ¿Qué tan difícil estuvo?';\n}\n\nif (isNaN(sessionNumber) || sessionNumber < 1) {\n  return '¿Fue la Sesión 1, 2, o 3 de esta semana?';\n}\n\nif (isNaN(weekNumber) || weekNumber < 1) {\n  return 'Error: No puedo determinar el número de semana actual.';\n}\n\n// Calculate pace\nconst paceMinPerKm = timeMinutes / distance;\nconst paceMin = Math.floor(paceMinPerKm);\nconst paceSec = Math.round((paceMinPerKm % 1) * 60);\n\n// Call the HTTP Request Tool\nconst result = await $tools.save_workout_to_db({\n  parameters0_Value: phone,\n  parameters1_Value: weekNumber.toString(),\n  parameters2_Value: sessionNumber.toString(),\n  parameters3_Value: distance.toString(),\n  parameters4_Value: timeMinutes.toString(),\n  parameters5_Value: paceMinPerKm.toFixed(2),\n  parameters6_Value: difficultyRating.toString(),\n  parameters7_Value: feedback\n});\n\nreturn `¡Entreno registrado! ${distance}km en ${timeMinutes}min (ritmo: ${paceMin}:${String(paceSec).padStart(2, '0')}/km). Dificultad: ${difficultyRating}/10.`;"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1280,
+        2032
+      ],
+      "id": "010b7d3d-c1c3-4184-84e1-61cddff9d7b9",
+      "name": "save_workout_completion"
+    },
+    {
+      "parameters": {
+        "content": "# **ONBOARDING AGENT**",
+        "height": 656,
+        "width": 752
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        384,
+        400
+      ],
+      "typeVersion": 1,
+      "id": "7c9352f6-b9b2-447d-b59f-c78221d23934",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": " #                                                                                                                                                                                               **PREMIUM FLOW**",
+        "height": 640,
+        "width": 2064,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -160,
+        1552
+      ],
+      "typeVersion": 1,
+      "id": "bbde9ac9-e78c-4aaf-9f90-7ce693700ac4",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# **PAYMENT ROUTE**",
+        "height": 384,
+        "width": 2144,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -192,
+        1120
+      ],
+      "typeVersion": 1,
+      "id": "7326f5aa-16d1-4440-961b-8dcd8ebeb072",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n# **ROUTER**",
+        "height": 304,
+        "width": 624,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -816,
+        1552
+      ],
+      "typeVersion": 1,
+      "id": "af696282-29e8-418a-bcb7-ef6636c5595e",
+      "name": "Sticky Note3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Check User in DB": {
+      "main": [
+        [
+          {
+            "node": "Determine Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Route": {
+      "main": [
+        [
+          {
+            "node": "Route to Flow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route to Flow": {
+      "main": [
+        [
+          {
+            "node": "Onboarding Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Plan Selection",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Weekly Plan",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Workout History",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Chat History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Onboarding": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "payment_processor",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Onboarding Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memory Onboarding": {
+      "ai_memory": [
+        [
+          {
+            "node": "payment_processor",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Onboarding Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Plan Selection": {
+      "main": [
+        [
+          {
+            "node": "Has Selected Plan?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Selected Plan?": {
+      "main": [
+        [
+          {
+            "node": "Build Stripe Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Plan": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Plan": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Ask Plan",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Stripe Data": {
+      "main": [
+        [
+          {
+            "node": "Create Stripe Checkout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Stripe Checkout": {
+      "main": [
+        [
+          {
+            "node": "Update User Trial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update User Trial": {
+      "main": [
+        [
+          {
+            "node": "Format Payment Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Verification?": {
+      "main": [
+        [
+          {
+            "node": "Verify Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check User in DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond Verification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Is Verification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Payment Link": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_stripe_checkout": {
+      "ai_tool": [
+        [
+          {
+            "node": "payment_processor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "payment_processor": {
+      "ai_tool": [
+        [
+          {
+            "node": "Onboarding Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Onboarding Agent": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send_payment_link": {
+      "ai_tool": [
+        [
+          {
+            "node": "payment_processor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "save_onboarding_data": {
+      "ai_tool": [
+        [
+          {
+            "node": "Onboarding Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Workout History": {
+      "main": [
+        [
+          {
+            "node": "Merge Premium Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Chat History": {
+      "main": [
+        [
+          {
+            "node": "Merge Premium Data",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Build Premium Context": {
+      "main": [
+        [
+          {
+            "node": "Save User Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Premium": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Premium Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memory Premium": {
+      "ai_memory": [
+        [
+          {
+            "node": "Premium Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save User Message": {
+      "main": [
+        [
+          {
+            "node": "Premium Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Premium Agent": {
+      "main": [
+        [
+          {
+            "node": "Save Neo Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Weekly Plan": {
+      "main": [
+        [
+          {
+            "node": "Merge Premium Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Premium Data": {
+      "main": [
+        [
+          {
+            "node": "Build Premium Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "save_workout_to_db": {
+      "ai_tool": [
+        [
+          {
+            "node": "Premium Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "save_workout_completion": {
+      "ai_tool": [
+        [
+          {
+            "node": "Premium Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Neo Response1": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4a895e75-a382-4d2e-9d8b-ea41bd3b7a9a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "DUQAvhEJG0cvD1rT",
+  "tags": []
+}

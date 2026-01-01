@@ -1,0 +1,522 @@
+{
+  "name": "Neo - Weekly Plan Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "da3be7ee-71a6-46f0-a6fd-63afbd99e471",
+      "name": "Every Monday 8 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -160,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/users",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "subscripcio",
+              "value": "in.(active,trial)"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "22f4cc7f-36c6-4fdf-b73f-303be715ffee",
+      "name": "Get Active Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        64,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "ae62ab86-afd8-4383-93fd-e33fd0be10d7",
+      "name": "Split Into Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        288,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/workout_history",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "=eq.{{ $json.phone }}"
+            },
+            {
+              "name": "order",
+              "value": "created_at.desc"
+            },
+            {
+              "name": "limit",
+              "value": "30"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3b98263b-a0d4-4953-b5a2-05429c349870",
+      "name": "Get User Workout History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        512,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/weekly_plans",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "=eq.{{ $('Split Into Batches').item.json.phone }}"
+            },
+            {
+              "name": "order",
+              "value": "week_number.desc"
+            },
+            {
+              "name": "limit",
+              "value": "4"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5e907850-a9b1-4bb3-99ee-ba3269d4ec35",
+      "name": "Get Previous Plans",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        512,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const userData = $('Split Into Batches').first().json;\n\n// Access merged data from both GET nodes\nconst workoutHistory = $('Get User Workout History').first().json || [];\nconst previousPlans = $('Get Previous Plans').first().json || [];\n\n// Calculate next week number (find max week_number and add 1)\nlet weekNumber = 1;\nif (previousPlans.length > 0) {\n  const maxWeek = Math.max(...previousPlans.map(p => p.week_number || 0));\n  weekNumber = maxWeek + 1;\n}\n\n// Analyze last week's performance\nlet lastWeekWorkouts = workoutHistory.filter(w => {\n  const workoutDate = new Date(w.created_at);\n  const weekAgo = new Date();\n  weekAgo.setDate(weekAgo.getDate() - 7);\n  return workoutDate >= weekAgo;\n});\n\nlet completionRate = 0;\nlet avgDifficulty = 'bien';\nlet totalDistance = 0;\nlet strugglingCount = 0;\n\nif (lastWeekWorkouts.length > 0) {\n  const completedWorkouts = lastWeekWorkouts.filter(w => w.completed);\n  completionRate = (completedWorkouts.length / lastWeekWorkouts.length) * 100;\n  totalDistance = completedWorkouts.reduce((sum, w) => sum + (w.distance || 0), 0);\n  \n  const difficulties = completedWorkouts.map(w => w.difficulty_rating).filter(d => d);\n  strugglingCount = difficulties.filter(d => d >= 8).length; // 8+ = duro\n  const easyCount = difficulties.filter(d => d <= 4).length; // 4 or less = facil\n  \n  if (strugglingCount >= 2) {\n    avgDifficulty = 'duro';\n  } else if (easyCount >= 2) {\n    avgDifficulty = 'facil';\n  }\n}\n\n// Determine progression strategy\nlet progressionNote = '';\nif (avgDifficulty === 'duro') {\n  progressionNote = 'El usuario ha reportado dificultad. REDUCE la intensidad un 10-15% esta semana.';\n} else if (avgDifficulty === 'facil' && completionRate >= 80) {\n  progressionNote = 'El usuario va bien. INCREMENTA ligeramente la carga (5-10%).';\n} else if (completionRate < 50) {\n  progressionNote = 'Baja adherencia. Mantén intensidad similar pero MOTIVA más.';\n} else {\n  progressionNote = 'Buen progreso. Mantén la progresión normal.';\n}\n\nreturn {\n  userPhone: userData.phone,\n  userName: userData.nom || 'Usuario',\n  userAge: userData.edat,\n  userWeight: userData.pes,\n  userLevel: userData.nivell,\n  userGoals: userData.objectius,\n  diesDisponibles: userData.dies_disponibles,\n  terreny: userData.terreny,\n  weekNumber,\n  completionRate: Math.round(completionRate),\n  avgDifficulty,\n  totalDistanceLastWeek: totalDistance.toFixed(1),\n  progressionNote,\n  lastWeekFeedback: lastWeekWorkouts.map(w => w.feedback).filter(f => f).join(' | ') || 'Sin feedback'\n};"
+      },
+      "id": "32279920-a704-4469-be6f-bcf9dcc463eb",
+      "name": "Analyze Progress",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Genera un plan de entrenamiento semanal personalizado.\n\nUSUARIO:\n- Nombre: {{ $json.userName }}\n- Edad: {{ $json.userAge }} años\n- Peso: {{ $json.userWeight }} kg\n- Nivel: {{ $json.userLevel }}\n- Objetivos: {{ $json.userGoals }}\n- Días disponibles: {{ $json.diesDisponibles }}\n- Terreno: {{ $json.terreny }}\n\nSEMANA: {{ $json.weekNumber }}\n\nRENDIMIENTO ÚLTIMA SEMANA:\n- Tasa de completación: {{ $json.completionRate }}%\n- Dificultad promedio: {{ $json.avgDifficulty }}\n- Distancia total: {{ $json.totalDistanceLastWeek }}km\n- Feedback: {{ $json.lastWeekFeedback }}\n\nESTRATEGIA DE PROGRESIÓN:\n{{ $json.progressionNote }}\n\nGENERA UN PLAN CON:\n1. Resumen motivador de la semana anterior\n2. Objetivo principal de esta semana\n3. {{ $json.diesDisponibles }} sesiones detalladas:\n   - Nombre de la sesión\n   - Distancia/duración\n   - Ritmo objetivo\n   - Descripción (calentamiento, trabajo, enfriamiento)\n4. Un tip de nutrición específico para esta semana\n5. Mensaje motivacional final\n\nFormato:\n---\n🏃‍♂️ PLAN SEMANA {{ $json.weekNumber }}\n\n📊 RESUMEN SEMANA ANTERIOR:\n[Análisis breve]\n\n🎯 OBJETIVO ESTA SEMANA:\n[Objetivo específico]\n\n📅 SESIONES:\n\n**Sesión 1 - [Nombre]**\n- Distancia: [X km]\n- Ritmo: [X:XX /km]\n- Descripción: [detalle]\n\n[... más sesiones ...]\n\n🥗 TIP NUTRICIONAL:\n[Consejo específico]\n\n💪 MENSAJE MOTIVACIONAL:\n[Motivación personalizada]\n---\n\nSé específico, profesional y motivador. Usa el formato exacto.",
+        "options": {
+          "systemMessage": "Eres Neo, un entrenador profesional de running. Genera planes semanales personalizados basados en el progreso del usuario. Sé específico con distancias, ritmos y consejos. Formato claro y motivador."
+        }
+      },
+      "id": "d4ee8f7b-2f3a-4e4c-9c45-b67bdf359418",
+      "name": "Generate Weekly Plan",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.3,
+      "position": [
+        1184,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "maxTokens": 2000,
+          "temperature": 0.7
+        }
+      },
+      "id": "a5f3020f-48c2-491b-b6cd-c097ee1e3a8b",
+      "name": "OpenAI GPT-4o Weekly",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        432
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/weekly_plans",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_phone\": \"{{ $('Analyze Progress').item.json.userPhone }}\",\n  \"week_number\": {{ $('Analyze Progress').item.json.weekNumber }},\n  \"plan_text\": {{ $('Generate Weekly Plan').item.json.output | jsonStringify }},\n  \"status\": \"active\"\n}",
+        "options": {}
+      },
+      "id": "be45b64f-0c1a-4769-b5aa-ae30244c391b",
+      "name": "Save Plan to DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1536,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $('Analyze Progress').item.json.userPhone }}",
+        "textBody": "=¡Buenos días {{ $('Analyze Progress').item.json.userName }}! 🌅\n\nAquí está tu plan para esta semana:\n\n{{ $('Generate Weekly Plan').item.json.output }}\n\n¡A por ello! 💪🏃‍♂️",
+        "additionalFields": {}
+      },
+      "id": "d6937c7c-85a5-4f94-b146-76b3ffd1096f",
+      "name": "Send Weekly Plan",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1984,
+        208
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "YOUR_WHATSAPP_CREDENTIAL_ID",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "c2961c79-cc4d-443e-8c97-3db6a1c283d0",
+      "name": "Wait 5 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2208,
+        336
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "includeUnpaired": true
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        736,
+        208
+      ],
+      "id": "307c8033-e913-45c0-89fa-e2d9be8ad046",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/weekly_plans",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "=eq.{{ $('Analyze Progress').item.json.userPhone }}"
+            },
+            {
+              "name": "week_number",
+              "value": "=eq.{{ $('Analyze Progress').item.json.weekNumber - 1 }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"completed\"\n}",
+        "options": {}
+      },
+      "id": "5992b058-0c99-4f1c-adde-a23766fb49b1",
+      "name": "Mark Previous Week Completed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        208
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Monday 8 AM": {
+      "main": [
+        [
+          {
+            "node": "Get Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Users": {
+      "main": [
+        [
+          {
+            "node": "Split Into Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Batches": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Previous Plans",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get User Workout History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User Workout History": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Previous Plans": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Analyze Progress": {
+      "main": [
+        [
+          {
+            "node": "Generate Weekly Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Weekly Plan": {
+      "main": [
+        [
+          {
+            "node": "Save Plan to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI GPT-4o Weekly": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Weekly Plan",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Plan to DB": {
+      "main": [
+        [
+          {
+            "node": "Mark Previous Week Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Weekly Plan": {
+      "main": [
+        [
+          {
+            "node": "Wait 5 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Split Into Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Analyze Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Previous Week Completed": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2c322733-1cdc-4bbc-949a-3d2c23d6f9be",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "5IycykdWolCNeKzw",
+  "tags": []
+}

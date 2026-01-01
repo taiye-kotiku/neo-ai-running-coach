@@ -1,0 +1,33 @@
+# Credentials
+*.env
+.env.local
+credentials.json
+secrets/
+api-keys.txt
+
+# n8n
+.n8n/
+node_modules/
+*.backup
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Temp
+temp/
+tmp/
+*.log
+*.cache
+
+# Personal
+notes.txt
+todo.md

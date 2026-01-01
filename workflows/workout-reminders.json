@@ -1,0 +1,401 @@
+{
+  "name": "Neo - Workout Reminder System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 21 * * *"
+            }
+          ]
+        }
+      },
+      "id": "ecba0944-de32-463e-a7b5-c0a00d45faf4",
+      "name": "Every Day 9 PM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/users",
+        "authentication": "headerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "subscripcio",
+              "value": "in.(active,trial)"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1bb6f6fd-fd59-4f86-a269-ddccc8054708",
+      "name": "Get Active Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "48fcbb72-7b97-4e9f-935b-ad51c90f85ab",
+      "name": "Split Into Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        448,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/weekly_plans",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "=eq.{{ $json.phone }}"
+            },
+            {
+              "name": "order",
+              "value": "week_number.desc"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            },
+            {
+              "name": "status",
+              "value": "eq.active"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "af471aa0-6818-4e6a-b873-40084ab8ff78",
+      "name": "Get Current Week Plan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/workout_history",
+        "authentication": "headerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_phone",
+              "value": "=eq.{{ $('Split Into Batches').item.json.phone }}"
+            },
+            {
+              "name": "completion_date",
+              "value": "=gte.{{ $now.startOf('day').toISO() }}"
+            },
+            {
+              "name": "completed",
+              "value": "eq.true"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "af5e0e18-7ddd-434b-9a21-a0655a2f4c13",
+      "name": "Check Today's Workout",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const userData = $('Split Into Batches').first().json;\nconst currentPlanResult = $('Get Current Week Plan').first().json;\nconst todayWorkoutResult = $('Check Today\\'s Workout').first().json;\n\n// Check if user has a current plan\nif (!currentPlanResult || currentPlanResult.length === 0) {\n  return { shouldRemind: false, reason: 'No active plan' };\n}\n\n// Check if user already reported today's workout\nif (todayWorkoutResult && todayWorkoutResult.length > 0) {\n  return { shouldRemind: false, reason: 'Already completed today' };\n}\n\nconst currentPlan = currentPlanResult[0];\nconst planText = currentPlan.plan_text || '';\nconst weekNumber = currentPlan.week_number;\n\n// Determine day of week (0 = Sunday, 1 = Monday, etc.)\nconst today = new Date();\nconst dayOfWeek = today.getDay();\nconst dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];\nconst dayName = dayNames[dayOfWeek];\n\n// Parse plan to check if today is mentioned\n// Look for the day name in the plan text\nconst planLower = planText.toLowerCase();\nconst dayNameLower = dayName.toLowerCase();\n\n// Check if today's day appears in the plan\nconst hasTodayInPlan = planLower.includes(dayNameLower);\n\n// Also check common session naming patterns\nconst hasSessionToday = planLower.includes(`sesión`) && planLower.includes(dayNameLower);\n\n// If today is not mentioned in the plan, don't send reminder\nif (!hasTodayInPlan && !hasSessionToday) {\n  return { shouldRemind: false, reason: `No workout scheduled for ${dayName}` };\n}\n\n// User has a workout scheduled for today and hasn't completed it\nreturn {\n  shouldRemind: true,\n  userPhone: userData.phone,\n  userName: userData.nom || 'Usuario',\n  dayName,\n  weekNumber\n};"
+      },
+      "id": "403c340a-2ffa-4e03-9fa0-921d289d01e5",
+      "name": "Should Send Reminder?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.shouldRemind }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0ce23a0c-ec15-4b62-bd3b-0d2e2c7fc29a",
+      "name": "Should Remind?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $json.userPhone }}",
+        "textBody": "=¡Hola {{ $json.userName }}! 👋\n\n¿Qué tal tu sesión de hoy ({{ $json.dayName }})?\n\nSi la hiciste, cuéntame cómo te fue - esto me ayuda a ajustar tu próximo plan. 😊\n\nSi no pudiste, no te preocupes, ¡recuperamos mañana! 💪\n\nResponde cuando tengas un momento 🏃‍♂️",
+        "additionalFields": {}
+      },
+      "id": "1065649d-ab64-4c56-b2ee-4d96b512b25d",
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1568,
+        96
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "YOUR_WHATSAPP_CREDENTIAL_ID",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "id": "fd940aef-812c-415e-a168-a31d3a72f134",
+      "name": "Wait 3 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1792,
+        176
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "includeUnpaired": true
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        896,
+        96
+      ],
+      "id": "cd7d3970-6eef-42b6-9771-917013df4f7d",
+      "name": "Merge"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Day 9 PM": {
+      "main": [
+        [
+          {
+            "node": "Get Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Users": {
+      "main": [
+        [
+          {
+            "node": "Split Into Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Batches": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Current Week Plan",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Today's Workout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Current Week Plan": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Today's Workout": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Should Send Reminder?": {
+      "main": [
+        [
+          {
+            "node": "Should Remind?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Remind?": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "Wait 3 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 3 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Split Into Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Should Send Reminder?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fd064714-b7f2-48d9-b2f5-404f2f9aae90",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "TgzcPccUbiy7bSJG",
+  "tags": []
+}

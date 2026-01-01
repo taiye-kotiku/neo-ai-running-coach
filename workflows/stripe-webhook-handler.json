@@ -1,0 +1,516 @@
+{
+  "name": "Neo - Stripe Webhook Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "checkout-completed",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "checkout.session.completed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b0b861fb-ce27-43cf-af93-707b2a32fe3f",
+      "name": "Checkout Completed?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "subscription-updated",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "customer.subscription.updated",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3fcb254d-ee7f-4863-8c42-514f0e494875",
+      "name": "Subscription Updated?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        624,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "subscription-deleted",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "customer.subscription.deleted",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6cd7c36d-d33c-4736-bced-18a9ec6730be",
+      "name": "Subscription Deleted?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        400,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract phone number from metadata\nconst metadata = $input.first().json.data.object.metadata;\nconst phone = metadata.phone;\nconst customerId = $input.first().json.data.object.customer;\nconst subscriptionId = $input.first().json.data.object.subscription;\n\nreturn {\n  phone,\n  customerId,\n  subscriptionId\n};"
+      },
+      "id": "ef88234e-45bc-4b0d-a060-8c0c9a4982ed",
+      "name": "Extract Checkout Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/users",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "=eq.{{ $json.phone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscripcio\": \"active\",\n  \"stripe_customer_id\": \"{{ $json.customerId }}\",\n  \"stripe_subscription_id\": \"{{ $json.subscriptionId }}\"\n}",
+        "options": {}
+      },
+      "id": "d206448d-6e94-4000-8343-658e0e9e9d6e",
+      "name": "Activate Subscription",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        848,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $('Extract Checkout Data').item.json.phone }}",
+        "textBody": "¡Bienvenido a Neo! 🎉\n\nTu suscripción está activa y lista para usar.\n\n✅ Tienes 14 días de prueba gratis\n✅ Acceso completo ilimitado\n✅ Planes semanales personalizados cada lunes\n✅ Adaptación según tu progreso\n\nEscríbeme cuando quieras y empezamos a entrenar juntos. 💪\n\n¿Cómo te sientes hoy?",
+        "additionalFields": {}
+      },
+      "id": "a7d1287b-a9ba-446b-a783-a8b121cce85c",
+      "name": "Send Welcome Message",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1072,
+        0
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "YOUR_WHATSAPP_CREDENTIAL_ID",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if trial ended and payment succeeded\nconst subscription = $input.first().json.data.object;\nconst previousAttributes = $input.first().json.data.previous_attributes || {};\n\n// If status changed from trialing to active, payment was successful\nif (previousAttributes.status === 'trialing' && subscription.status === 'active') {\n  return {\n    phone: subscription.metadata.phone,\n    customerId: subscription.customer,\n    subscriptionId: subscription.id,\n    event: 'trial_ended_paid'\n  };\n}\n\nreturn {null};"
+      },
+      "id": "e6659fc2-cea0-4b61-97d3-c1a579aeaf4c",
+      "name": "Check Trial to Paid",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $json.phone }}",
+        "textBody": "¡Gracias por confiar en Neo! 🙏\n\nTu período de prueba ha terminado y tu suscripción ahora está activa.\n\nSeguimos juntos en este viaje. ¡A por tus objetivos! 💪🏃‍♂️",
+        "additionalFields": {}
+      },
+      "id": "d9c9f92a-ea07-4a7b-ac92-663e7a911d57",
+      "name": "Send Trial Ended Message",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1072,
+        192
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "YOUR_WHATSAPP_CREDENTIAL_ID",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract cancellation data\nconst subscription = $input.first().json.data.object;\n\nreturn {\n  phone: subscription.metadata.phone,\n  customerId: subscription.customer,\n  subscriptionId: subscription.id\n};"
+      },
+      "id": "00400801-8f6c-4165-965e-8b80e708c893",
+      "name": "Extract Cancellation Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/users",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "=eq.{{ $json.phone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscripcio\": \"cancelled\"\n}",
+        "options": {}
+      },
+      "id": "ebb3acd4-1133-4b7b-957b-30d752db5bed",
+      "name": "Cancel Subscription",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        848,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $('Extract Cancellation Data').item.json.phone }}",
+        "textBody": "Lamento verte partir. 😢\n\nTu suscripción a Neo ha sido cancelada.\n\nSi cambias de opinión o quieres volver a entrenar juntos, solo escribe:\n👉 activar suscripción\n\n¡Te deseo lo mejor en tu camino! 🏃‍♂️",
+        "additionalFields": {}
+      },
+      "id": "46211b52-bd2b-4723-b0b1-a52c5ed368fb",
+      "name": "Send Cancellation Message",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1072,
+        384
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "YOUR_WHATSAPP_CREDENTIAL_ID",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"received\": true} }}",
+        "options": {}
+      },
+      "id": "4c5df226-7940-4a2c-81d8-a8bbb12c8866",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1296,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "events": [
+          "checkout.session.completed",
+          "customer.subscription.updated",
+          "customer.subscription.deleted"
+        ]
+      },
+      "type": "n8n-nodes-base.stripeTrigger",
+      "typeVersion": 1,
+      "position": [
+        176,
+        192
+      ],
+      "id": "87f2c06d-b715-4678-b13e-6053950c2f61",
+      "name": "Stripe Trigger",
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "stripeApi": {
+          "id": "YOUR_STRIPE_CREDENTIAL_ID",
+          "name": "Live Stripe"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Checkout Completed?": {
+      "main": [
+        [
+          {
+            "node": "Extract Checkout Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subscription Updated?": {
+      "main": [
+        [
+          {
+            "node": "Check Trial to Paid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subscription Deleted?": {
+      "main": [
+        [
+          {
+            "node": "Extract Cancellation Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Checkout Data": {
+      "main": [
+        [
+          {
+            "node": "Activate Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activate Subscription": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Welcome Message": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Trial to Paid": {
+      "main": [
+        [
+          {
+            "node": "Send Trial Ended Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Trial Ended Message": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Cancellation Data": {
+      "main": [
+        [
+          {
+            "node": "Cancel Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Subscription": {
+      "main": [
+        [
+          {
+            "node": "Send Cancellation Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Cancellation Message": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe Trigger": {
+      "main": [
+        [
+          {
+            "node": "Checkout Completed?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Subscription Updated?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Subscription Deleted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b2a0fb7b-81cc-4638-92db-23cec97b9eb1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "IUH0UHU3xu3fs9d0",
+  "tags": []
+}
